@@ -1,4 +1,4 @@
-package service
+package goAmqp
 
 import (
 	ramqp "github.com/rabbitmq/amqp091-go"
