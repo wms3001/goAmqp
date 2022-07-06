@@ -19,19 +19,11 @@ type GoAmqp struct {
 	Connection  *amqp.Connection
 	Channel     *amqp.Channel
 	Queue       *amqp.Queue
+	Delivery    <-chan amqp.Delivery
 }
 
 func (goAmqp *GoAmqp) OpenConn() *goCommon.Resp {
 	var resp = &goCommon.Resp{}
-	//work, _ := os.Getwd()
-	//viper.SetConfigName("amqp")
-	//viper.SetConfigType("yml")
-	//viper.AddConfigPath(work + "/conf")
-	//viper.ReadInConfig()
-	//host := viper.GetString("amqp.host")
-	//port := viper.GetString("amqp.port")
-	//user := viper.GetString("amqp.user")
-	//pass := viper.GetString("amqp.pass")
 	connnect, err := amqp.Dial("amqp://" + goAmqp.User + ":" + goAmqp.Pass + "@" + goAmqp.Host + ":" + goAmqp.Port + "/")
 	if err != nil {
 		resp.Code = -1
@@ -42,6 +34,10 @@ func (goAmqp *GoAmqp) OpenConn() *goCommon.Resp {
 		goAmqp.Connection = connnect
 	}
 	return resp
+}
+
+func (goAmqp *GoAmqp) CloseConn() {
+	goAmqp.Connection.Close()
 }
 
 func (goAmqp *GoAmqp) OpenChannel() *goCommon.Resp {
@@ -58,19 +54,12 @@ func (goAmqp *GoAmqp) OpenChannel() *goCommon.Resp {
 	return resp
 }
 
+func (goAmqp *GoAmqp) CloseChannel() {
+	goAmqp.Channel.Close()
+}
+
 func (goAmqp *GoAmqp) DeclareQueue(queueName string) *goCommon.Resp {
 	var resp = &goCommon.Resp{}
-	//work, _ := os.Getwd()
-	//viper.SetConfigName("amqp")
-	//viper.SetConfigType("yml")
-	//viper.AddConfigPath(work + "/conf")
-	//viper.ReadInConfig()
-	//durable := viper.GetBool("amqp.durable")
-	//autoDelete := viper.GetBool("amqp.autoDelete")
-	//exclusive := viper.GetBool("amqp.exclusive")
-	//noWait := viper.GetBool("amqp.noWait")
-	//xMessageTtl := viper.GetInt("amqp.x-message-ttl")
-
 	var args amqp.Table = map[string]interface{}{}
 	args["x-message-ttl"] = goAmqp.Xmessagettl
 	q, err := goAmqp.Channel.QueueDeclare(
@@ -88,6 +77,49 @@ func (goAmqp *GoAmqp) DeclareQueue(queueName string) *goCommon.Resp {
 		resp.Code = 1
 		resp.Message = "success"
 		goAmqp.Queue = &q
+	}
+	return resp
+}
+
+func (goAmqp *GoAmqp) SendMessage(msg string) *goCommon.Resp {
+	var resp = &goCommon.Resp{}
+	err := goAmqp.Channel.Publish(
+		"",                //交换
+		goAmqp.Queue.Name, //队列名称
+		false,             //强制为
+		false,             //立即
+		amqp.Publishing{
+			ContentType: "text/plain",
+			Body:        []byte(msg),
+		})
+	if err != nil {
+		resp.Code = -1
+		resp.Message = err.Error()
+	} else {
+		resp.Code = 1
+		resp.Message = "success"
+	}
+	return resp
+}
+
+func (goAmqp *GoAmqp) Consume() *goCommon.Resp {
+	var resp = &goCommon.Resp{}
+	msgs, err := goAmqp.Channel.Consume(
+		goAmqp.Queue.Name, //队列名称
+		"",                //消费者
+		true,              //自动确认
+		false,             //排他
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		resp.Code = -1
+		resp.Message = err.Error()
+	} else {
+		resp.Code = 1
+		resp.Message = "success"
+		goAmqp.Delivery = msgs
 	}
 	return resp
 }
